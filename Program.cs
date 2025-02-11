@@ -4,9 +4,14 @@ using dotaitemmine.models.httpResponse;
 using Newtonsoft.Json;
 using Simple.Sqlite;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace dotaitemmine;
 
@@ -15,7 +20,7 @@ internal class Program
     static async Task Main(string[] args)
     {
         const string filePath = "config.json";
-        const decimal exchangeRate = 5.809m;
+        const decimal exchangeRate = 5.788m;
 
         var config = leArquivoConfig(filePath);
         if (config == null)
@@ -43,7 +48,103 @@ internal class Program
 
         var itens = cnn.GetAll<Item>();
 
-        await dmarket(cnn, exchangeRate, itens);
+        var dmarketTask = dmarket(cnn, exchangeRate, itens);
+        //var steamTask = steam(cnn, exchangeRate, itens, config.SteamAuth);
+
+        await Task.WhenAll(dmarketTask);
+    }
+
+    private static async Task steam(ISqliteConnection cnn, decimal exchangeRate, IEnumerable<Item> itens, string steamAuth)
+    {
+        // Número máximo de tentativas
+        const int maxRetries = 3;
+
+        var bulk_Data = new List<Data>();
+        var captureId = Guid.NewGuid();
+
+        const string baseUrl = "https://steamcommunity.com/market/search?appid=570&q=prop_def_index:";
+
+        var cookieContainer = new CookieContainer();
+        using var handler = new HttpClientHandler { CookieContainer = cookieContainer };
+        using var client = new HttpClient(handler);
+
+        foreach (var cookie in steamAuth.Split(';'))
+        {
+            var cookieParts = cookie.Split('=', 2);
+            if (cookieParts.Length == 2)
+            {
+                string name = cookieParts[0].Trim();
+                string value = cookieParts[1].Trim();
+                cookieContainer.Add(new Cookie(name, value, "/", "steamcommunity.com"));
+            }
+        }
+
+        foreach (var item in itens)
+        {
+            // Função para fazer a requisição com tentativas
+            var attempt = 0;
+            var success = false;
+
+            while (attempt <= maxRetries && !success)
+            {
+                if (attempt > 0) await Task.Delay(2000);
+
+                try
+                {
+                    // URL para o GET
+                    var uri = new Uri($"{baseUrl}{item.ItemId}");
+
+                    // Requisição GET com o cookie de autenticação
+                    var response = await client.GetAsync(uri);
+                    string htmlContent = await response.Content.ReadAsStringAsync();
+
+                    // Expressão regular para encontrar os valores de `data-price`
+                    var matches = Regex.Matches(htmlContent, @"data-price=""(\d+)""");
+
+                    // Obtém todos os valores numéricos encontrados, converte para inteiro e filtra os maiores que 0
+                    var prices = matches
+                        .Select(m => int.Parse(m.Groups[1].Value))
+                        .Where(price => price > 0)
+                        .ToList();
+
+                    // Obtém o menor valor e divide por 100, caso existam valores válidos
+                    decimal lowestPrice = prices.Count != 0 ? prices.Min() / 100m : 0;
+
+                    if (lowestPrice > 0)
+                    {
+                        bulk_Data.Add(new Data()
+                        {
+                            CaptureId = captureId,
+                            ItemId = item.ItemId,
+                            Price = lowestPrice,
+                        });
+
+                        Console.WriteLine($"[Steam] Preço: {lowestPrice:C} | {item.Name}");
+                        success = true; // Marca como sucesso
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[Steam] Nenhum preço válido encontrado: {item.Name}");
+                        //attempt++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Steam] Erro na tentativa {attempt + 1} para o item {item.Name}");
+                }
+
+                attempt++;
+            }
+        }
+
+        cnn.BulkInsert(bulk_Data);
+        cnn.Insert(new ItemCaptured()
+        {
+            CaptureId = captureId,
+            ServiceType = ServiceType.STEAM,
+            DateTime = DateTime.Now,
+            ExchangeRate = exchangeRate,
+        });
     }
 
     /// <summary>
@@ -120,7 +221,7 @@ internal class Program
         const string apiUrl = "https://api.dmarket.com/exchange/v1/market/items?side=market&orderBy=price&orderDir=asc&title=";
         const string paramsUrl = "&priceFrom=0&priceTo=0&treeFilters=&gameId=9a92&types=dmarket&myFavorites=false&cursor=&limit=20&currency=USD&platform=browser&isLoggedIn=false";
 
-        var datas = new List<Data>();
+        var bulk_Data = new List<Data>();
         var captureId = Guid.NewGuid();
 
         foreach (var item in itens)
@@ -148,9 +249,9 @@ internal class Program
                     // Converte o preço em DOLAR para BRL (em decimal com duas casas decimais)
                     var priceBRL = Math.Round(decimal.Parse(itemResult.price.USD) * exchangeRate / 100, 2);
 
-                    Console.WriteLine($"Preço: R$ {priceBRL} | {item.Name}");
+                    Console.WriteLine($"[Dmarket] Preço: R$ {priceBRL} | {item.Name}");
 
-                    datas.Add(new Data()
+                    bulk_Data.Add(new Data()
                     {
                         CaptureId = captureId,
                         ItemId = item.ItemId,
@@ -159,19 +260,19 @@ internal class Program
                 }
                 else
                 {
-                    Console.WriteLine($"Erro ({response.StatusCode}): {item}");
+                    Console.WriteLine($"[Dmarket] Erro ({response.StatusCode}): {item}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exceção ao processar '{item}': {ex.Message}");
+                Console.WriteLine($"[Dmarket] Exceção ao processar '{item}': {ex.Message}");
             }
 
             //// Pequeno atraso para evitar sobrecarga na API
             //await Task.Delay(500);
         }
 
-        cnn.BulkInsert(datas);
+        cnn.BulkInsert(bulk_Data);
         cnn.Insert(new ItemCaptured()
         {
             CaptureId = captureId,
