@@ -27,8 +27,12 @@ internal class Program
         var config = leArquivoConfig(filePath);
         if (config == null)
         {
-            Console.WriteLine("Não foi localizado o arquivo de configuração.");
+            Log.Error($"Não foi localizado o arquivo de configuração: {filePath}.\nEncerrando aplicação.");
             return;
+        }
+        else
+        {
+            Log.Information($"Arquivo de configuração localizado: {filePath}");
         }
 
         // Cria uma nova instância de conexão com o BD
@@ -46,6 +50,8 @@ internal class Program
         cnn.Insert(new ServiceMethod() { ServiceType = ServiceType.STEAM }, OnConflict.Ignore);
         cnn.Insert(new ServiceMethod() { ServiceType = ServiceType.DMARKET }, OnConflict.Ignore);
 
+        Log.Information("Iniciando captura de dados...");
+
         //await capturaIdItens(cnn, config.Items);
 
         var itens = cnn.GetAll<Item>();
@@ -54,6 +60,8 @@ internal class Program
         var steamTask = steam(cnn, exchangeRate, itens, config.SteamCookies);
 
         await Task.WhenAll(steamTask, dmarketTask);
+
+        Log.Information("Captura de dados finalizada");
     }
 
     /// <summary>
