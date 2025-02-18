@@ -4,15 +4,8 @@ using dotaitemmine.models.httpResponse;
 using Newtonsoft.Json;
 using Serilog;
 using Simple.Sqlite;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net;
-using System.Net.Http;
-using System.Reflection;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace dotaitemmine;
 
@@ -20,7 +13,7 @@ internal class Program
 {
     static async Task Main(string[] args)
     {
-        // Configurando o Serilog com cores no console
+        // Configurando o Serilog
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
