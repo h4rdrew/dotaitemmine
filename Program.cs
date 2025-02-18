@@ -2,6 +2,7 @@
 using dotaitemmine.models.db;
 using dotaitemmine.models.httpResponse;
 using Newtonsoft.Json;
+using Serilog;
 using Simple.Sqlite;
 using System;
 using System.Collections.Generic;
@@ -19,8 +20,16 @@ internal class Program
 {
     static async Task Main(string[] args)
     {
+        // Configurando o Serilog com cores no console
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .CreateLogger();
+
+        Log.Information("Aplicação iniciada");
+
         const string filePath = "config.json";
-        const decimal exchangeRate = 5.788m;
+        const decimal exchangeRate = 5.712m;
 
         var config = leArquivoConfig(filePath);
         if (config == null)
@@ -49,15 +58,15 @@ internal class Program
         var itens = cnn.GetAll<Item>();
 
         var dmarketTask = dmarket(cnn, exchangeRate, itens);
-        //var steamTask = steam(cnn, exchangeRate, itens, config.SteamAuth);
+        var steamTask = steam(cnn, exchangeRate, itens, config.SteamAuth);
 
-        await Task.WhenAll(dmarketTask);
+        await Task.WhenAll(steamTask, dmarketTask);
     }
 
     private static async Task steam(ISqliteConnection cnn, decimal exchangeRate, IEnumerable<Item> itens, string steamAuth)
     {
         // Número máximo de tentativas
-        const int maxRetries = 3;
+        const int maxRetries = 10;
 
         var bulk_Data = new List<Data>();
         var captureId = Guid.NewGuid();
@@ -118,26 +127,32 @@ internal class Program
                             ItemId = item.ItemId,
                             Price = lowestPrice,
                         });
-
-                        Console.WriteLine($"[Steam] Preço: {lowestPrice:C} | {item.Name}");
-                        success = true; // Marca como sucesso
+                        Log.Information($"[{nameof(ServiceMethod.ServiceType.STEAM)}] Preço: {lowestPrice:C} | {item.Name}");
+                        success = true;
                     }
                     else
                     {
-                        Console.WriteLine($"[Steam] Nenhum preço válido encontrado: {item.Name}");
-                        //attempt++;
+                        Log.Warning($"[{nameof(ServiceMethod.ServiceType.STEAM)}] Nenhum preço válido encontrado: {item.Name}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Steam] Erro na tentativa {attempt + 1} para o item {item.Name}");
+                    Log.Error(ex, $"[{nameof(ServiceMethod.ServiceType.STEAM)}] Erro na tentativa {attempt + 1} para o item {item.Name}");
                 }
 
                 attempt++;
+
+                if (attempt >= maxRetries)
+                {
+                    Log.Error($"[{nameof(ServiceMethod.ServiceType.STEAM)}] Máximo de tentativas atingido para o item {item.Name}");
+                }
             }
         }
 
         cnn.BulkInsert(bulk_Data);
+
+        Log.Information($"[{nameof(ServiceMethod.ServiceType.STEAM)}] Inseridos: {bulk_Data.Count} itens");
+
         cnn.Insert(new ItemCaptured()
         {
             CaptureId = captureId,
@@ -156,6 +171,8 @@ internal class Program
     private static async Task capturaIdItens(ISqliteConnection cnn, List<string> items)
     {
         HttpClient _httpClient = new();
+
+        var bulk_Item = new List<Item>();
 
         // URL base da API
         const string baseUrl = "https://liquipedia.net/dota2/";
@@ -182,29 +199,33 @@ internal class Program
                     if (match.Success)
                     {
                         string id = match.Groups[1].Value;
-                        Console.WriteLine($"ID encontrado: {id} | {item}");
-                        cnn.Insert(new Item { ItemId = int.Parse(id), Name = item }, OnConflict.Replace);
+                        bulk_Item.Add(new Item { ItemId = int.Parse(id), Name = item });
+                        Log.Information($"ID encontrado: {id} | {item}");
                     }
                     else
                     {
-                        Console.WriteLine($"ID não encontrado na página. Item: {item}");
+                        bulk_Item.Add(new Item { ItemId = 0, Name = item });
+                        Log.Warning($"ID não encontrado na página. Item: {item}");
                     }
                 }
                 else
                 {
-                    Console.WriteLine($"Erro ao localizar o item: {item}");
+                    Log.Error($"Erro ao localizar o item: {item}");
                     continue;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Console.WriteLine($"Erro ao processar o item: {item}");
+                Log.Error(ex, $"Erro ao processar o item: {item}");
                 continue;
             }
 
             // Pequeno atraso para evitar sobrecarga na API
             await Task.Delay(500);
         }
+
+        cnn.BulkInsert(bulk_Item, OnConflict.Ignore);
+        Log.Information($"Inseridos: {bulk_Item.Count} itens");
     }
 
     /// <summary>
@@ -249,7 +270,7 @@ internal class Program
                     // Converte o preço em DOLAR para BRL (em decimal com duas casas decimais)
                     var priceBRL = Math.Round(decimal.Parse(itemResult.price.USD) * exchangeRate / 100, 2);
 
-                    Console.WriteLine($"[Dmarket] Preço: R$ {priceBRL} | {item.Name}");
+                    //Log.Information($"[{nameof(ServiceMethod.ServiceType.DMARKET)}] Preço: R$ {priceBRL} | {item.Name}");
 
                     bulk_Data.Add(new Data()
                     {
@@ -260,12 +281,12 @@ internal class Program
                 }
                 else
                 {
-                    Console.WriteLine($"[Dmarket] Erro ({response.StatusCode}): {item}");
+                    Log.Warning($"[{nameof(ServiceMethod.ServiceType.DMARKET)}] Erro ({response.StatusCode}): {item}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Dmarket] Exceção ao processar '{item}': {ex.Message}");
+                Log.Error(ex, $"[{nameof(ServiceMethod.ServiceType.DMARKET)}] Exceção ao processar '{item}': {ex.Message}");
             }
 
             //// Pequeno atraso para evitar sobrecarga na API
@@ -273,6 +294,9 @@ internal class Program
         }
 
         cnn.BulkInsert(bulk_Data);
+
+        Log.Information($"[{nameof(ServiceMethod.ServiceType.DMARKET)}] Inseridos: {bulk_Data.Count} itens");
+
         cnn.Insert(new ItemCaptured()
         {
             CaptureId = captureId,
