@@ -51,12 +51,20 @@ internal class Program
         var itens = cnn.GetAll<Item>();
 
         var dmarketTask = dmarket(cnn, exchangeRate, itens);
-        var steamTask = steam(cnn, exchangeRate, itens, config.SteamAuth);
+        var steamTask = steam(cnn, exchangeRate, itens, config.SteamCookies);
 
         await Task.WhenAll(steamTask, dmarketTask);
     }
 
-    private static async Task steam(ISqliteConnection cnn, decimal exchangeRate, IEnumerable<Item> itens, string steamAuth)
+    /// <summary>
+    /// Método para capturar dados do site STEAM
+    /// </summary>
+    /// <param name="cnn">Sqlite Connection</param>
+    /// <param name="exchangeRate">Valor da cotação atual do BRL em relação ao USD</param>
+    /// <param name="itens">Lista que contém os dados sobre os itens</param>
+    /// <param name="steamCookies">Cookies para a requisição</param>
+    /// <returns></returns>
+    private static async Task steam(ISqliteConnection cnn, decimal exchangeRate, IEnumerable<Item> itens, string steamCookies)
     {
         // Número máximo de tentativas
         const int maxRetries = 10;
@@ -70,7 +78,7 @@ internal class Program
         using var handler = new HttpClientHandler { CookieContainer = cookieContainer };
         using var client = new HttpClient(handler);
 
-        foreach (var cookie in steamAuth.Split(';'))
+        foreach (var cookie in steamCookies.Split(';'))
         {
             var cookieParts = cookie.Split('=', 2);
             if (cookieParts.Length == 2)
@@ -224,7 +232,8 @@ internal class Program
     /// <summary>
     /// Método para capturar dados do site DMARKET
     /// </summary>
-    /// <param name="items">Lista que contém os nomes dos itens para buscar os dados</param>
+    /// <param name="cnn">Sqlite Connection</param>
+    /// <param name="items">Lista que contém os dados sobre os itens</param>
     /// <param name="exchangeRate">Valor da cotação atual do BRL em relação ao USD</param>
     /// <returns></returns>
     private static async Task dmarket(ISqliteConnection cnn, decimal exchangeRate, IEnumerable<Item> itens)

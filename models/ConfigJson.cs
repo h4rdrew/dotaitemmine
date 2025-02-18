@@ -7,5 +7,5 @@ public class ConfigJson
     public List<string> Items { get; set; } = [];
     public string DbPath { get; set; } = String.Empty;
     public List<int> ItemIds { get; set; } = [];
-    public string SteamAuth { get; set; } = String.Empty;
+    public string SteamCookies { get; set; } = String.Empty;
 }
