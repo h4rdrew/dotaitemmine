@@ -22,7 +22,7 @@ internal class Program
         Log.Information("Aplicação iniciada");
 
         const string filePath = "config.json";
-        const decimal exchangeRate = 5.712m;
+        const decimal exchangeRate = 5.685m;
 
         var config = leArquivoConfig(filePath);
         if (config == null)
@@ -280,7 +280,7 @@ internal class Program
                     // Converte o preço em DOLAR para BRL (em decimal com duas casas decimais)
                     var priceBRL = Math.Round(decimal.Parse(itemResult.price.USD) * exchangeRate / 100, 2);
 
-                    //Log.Information($"[{nameof(ServiceMethod.ServiceType.DMARKET)}] Preço: R$ {priceBRL} | {item.Name}");
+                    Log.Information($"[{nameof(ServiceMethod.ServiceType.DMARKET)}] Preço: R$ {priceBRL} | {item.Name}");
 
                     bulk_Data.Add(new Data()
                     {
