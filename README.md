@@ -7,7 +7,7 @@
 - [ ] Pega cotação atual (USD para BRL)
 
 ## Objetivo
-Coletar dados dos preços dos itens de markets diferentes, de acordo com a cotação atual
+Coletar dados dos preços dos itens (dota) de markets diferentes, de acordo com a cotação atual
 
 ## Utilizando:
 1. Crie um arquivo "ConfigJson.json" seguindo a model: [ConfigJson.cs](https://github.com/h4rdrew/dotaitemmine/blob/main/models/ConfigJson.cs)
