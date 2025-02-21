@@ -4,7 +4,10 @@
 - [x] Coleta dados no DMarket
 - [x] Coleta dados na Steam
 - [x] Grava dados da coleta em Banco de Dados (sqlite)
-- [ ] Pega cotação atual do Dolar (USD to BRL)
+- [ ] Pega cotação atual (USD para BRL)
+
+# Objetivo
+Coletar dados dos preços dos itens de markets diferentes, de acordo com a cotação atual
 
 ## Utilizando:
 1. Crie um arquivo "ConfigJson.json" seguindo a model: [ConfigJson.cs](https://github.com/h4rdrew/dotaitemmine/blob/main/models/ConfigJson.cs)
