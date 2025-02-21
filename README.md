@@ -8,7 +8,7 @@
 
 ## Utilizando:
 1. Crie um arquivo "ConfigJson.json" seguindo a model: [ConfigJson.cs](https://github.com/h4rdrew/dotaitemmine/blob/main/models/ConfigJson.cs)
-2. Propriedades obrigatórias para primeira inicialização: `Items`, `DbPath`, `SteamCookies`
+2. Propriedades obrigatórias para a inicialização: `Items`, `DbPath`, `SteamCookies`
  - `Items`: Nomes dos itens para coletar.
  - `DbPath`: Localização do banco de dados que será criado/acessado.
  - `SteamCookies`: Cookies da sessão atual (leia mais sobre abaixo)
