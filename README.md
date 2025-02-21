@@ -6,7 +6,7 @@
 - [x] Grava dados da coleta em Banco de Dados (sqlite)
 - [ ] Pega cotação atual (USD para BRL)
 
-# Objetivo
+## Objetivo
 Coletar dados dos preços dos itens de markets diferentes, de acordo com a cotação atual
 
 ## Utilizando:
